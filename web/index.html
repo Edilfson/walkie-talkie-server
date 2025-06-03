@@ -20,6 +20,7 @@
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="A new Flutter project.">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1A0F08">
 
   <!-- iOS meta tags & icons -->
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -34,29 +35,33 @@
   
   <!-- Audio support for web -->
   <script>
+    // Tek bir AudioContext örneği kullan (memory leak önler)
+    window.audioContext = null;
     window.playWalkieTalkieBeep = function() {
       try {
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        if (!window.audioContext) {
+          window.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        const audioContext = window.audioContext;
         const oscillator = audioContext.createOscillator();
         const gainNode = audioContext.createGain();
-        
         oscillator.connect(gainNode);
         gainNode.connect(audioContext.destination);
-        
         oscillator.frequency.value = 800; // 800 Hz beep
         oscillator.type = 'sine';
-        
         gainNode.gain.setValueAtTime(0, audioContext.currentTime);
         gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.1);
         gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-        
         oscillator.start(audioContext.currentTime);
         oscillator.stop(audioContext.currentTime + 0.5);
-        
-        console.log('🔊 Walkie Talkie beep sound played');
+        if (window.location.hostname === 'localhost') {
+          console.log('🔊 Walkie Talkie beep sound played');
+        }
         return true;
       } catch (e) {
-        console.log('Audio error: ' + e);
+        if (window.location.hostname === 'localhost') {
+          console.log('Audio error: ' + e);
+        }
         return false;
       }
     };
@@ -64,12 +69,20 @@
 
   <!-- Push Notification support for web (service worker registration) -->
   <script>
-    // Service worker kaydında hata yakalama ve loglama
+    // Service worker yolunu base href'e göre ayarla
+    function getServiceWorkerPath() {
+      var base = document.querySelector('base');
+      var baseHref = base ? base.getAttribute('href') : '/';
+      if (!baseHref.endsWith('/')) baseHref += '/';
+      return baseHref + 'flutter_service_worker.js';
+    }
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function() {
-        navigator.serviceWorker.register('flutter_service_worker.js')
+        navigator.serviceWorker.register(getServiceWorkerPath())
           .then(function(reg) {
-            console.log('Service worker registered:', reg);
+            if (window.location.hostname === 'localhost') {
+              console.log('Service worker registered:', reg);
+            }
           })
           .catch(function(err) {
             console.error('Service worker registration failed:', err);
@@ -77,7 +90,6 @@
       });
     }
     // Web Push API örnek (isteğe bağlı):
-    // Bildirim izni iste ve reddedilirse uyarı göster
     if (window.Notification && Notification.permission !== 'granted') {
       Notification.requestPermission().then(function(permission) {
         if (permission !== 'granted') {
@@ -89,12 +101,16 @@
     window.showPushNotification = function(title, options) {
       try {
         if (window.Notification && Notification.permission === 'granted') {
+          // Güvenlik: title ve options'ta zararlı içerik olmadığından emin olun
+          if (typeof title !== 'string' || title.length > 100) return;
           var notification = new Notification(title, options);
           notification.onclick = function(event) {
             event.preventDefault();
             window.focus();
             // Oda ekranına yönlendirme veya özel işlem eklenebilir
-            console.log('Bildirim tıklandı:', title);
+            if (window.location.hostname === 'localhost') {
+              console.log('Bildirim tıklandı:', title);
+            }
           };
         }
       } catch (e) {

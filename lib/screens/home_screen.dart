@@ -125,7 +125,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 30),
                 const Text(
-                  'Mevcut Odalar',
+                  'Odalar',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -134,24 +134,23 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 15),
                 Expanded(
-                  child: roomProvider.availableRooms.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'Henüz oda yok\nYeni oda oluşturmak için + butonuna tıklayın',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.white54,
-                              fontSize: 16,
-                            ),
-                          ),
-                        )
-                      : ListView.builder(
-                          itemCount: roomProvider.availableRooms.length,
-                          itemBuilder: (context, index) {
-                            final room = roomProvider.availableRooms[index];
-                            return Card(
+                  child: Builder(
+                    builder: (context) {
+                      final rooms =
+                          List<Room>.from(roomProvider.availableRooms);
+                      // Genel Sohbet'i en üste al
+                      final genelIndex =
+                          rooms.indexWhere((r) => r.id == 'genel');
+                      Room? genelRoom;
+                      if (genelIndex != -1) {
+                        genelRoom = rooms.removeAt(genelIndex);
+                      }
+                      return ListView(
+                        children: [
+                          if (genelRoom != null)
+                            Card(
                               margin: const EdgeInsets.only(bottom: 15),
-                              color: Colors.white.withOpacity(0.1),
+                              color: Colors.amber.withOpacity(0.2),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(15),
                               ),
@@ -159,28 +158,65 @@ class _HomeScreenState extends State<HomeScreen> {
                                 contentPadding: const EdgeInsets.all(15),
                                 leading: const CircleAvatar(
                                   backgroundColor: Colors.amber,
-                                  child: Icon(Icons.group, color: Colors.black),
+                                  child:
+                                      Icon(Icons.public, color: Colors.black),
                                 ),
                                 title: Text(
-                                  room.name,
+                                  genelRoom.name,
                                   style: const TextStyle(
-                                    color: Colors.white,
+                                    color: Colors.black,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
                                 subtitle: Text(
-                                  '${room.participants.length} kişi',
-                                  style: const TextStyle(color: Colors.white70),
+                                  '${genelRoom.participants.length} kişi',
+                                  style: const TextStyle(color: Colors.black87),
                                 ),
                                 trailing: const Icon(
                                   Icons.arrow_forward_ios,
-                                  color: Colors.white54,
+                                  color: Colors.black54,
                                 ),
-                                onTap: () => _joinRoom(roomProvider, room.id),
+                                onTap: () =>
+                                    _joinRoom(roomProvider, genelRoom!.id),
                               ),
-                            );
-                          },
-                        ),
+                            ),
+                          // Diğer odalar
+                          ...rooms.map((room) => Card(
+                                margin: const EdgeInsets.only(bottom: 15),
+                                color: Colors.white.withOpacity(0.1),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(15),
+                                ),
+                                child: ListTile(
+                                  contentPadding: const EdgeInsets.all(15),
+                                  leading: const CircleAvatar(
+                                    backgroundColor: Colors.amber,
+                                    child:
+                                        Icon(Icons.group, color: Colors.black),
+                                  ),
+                                  title: Text(
+                                    room.name,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    '${room.participants.length} kişi',
+                                    style:
+                                        const TextStyle(color: Colors.white70),
+                                  ),
+                                  trailing: const Icon(
+                                    Icons.arrow_forward_ios,
+                                    color: Colors.white54,
+                                  ),
+                                  onTap: () => _joinRoom(roomProvider, room.id),
+                                ),
+                              )),
+                        ],
+                      );
+                    },
+                  ),
                 ),
               ],
             );

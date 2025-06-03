@@ -26,6 +26,15 @@ class RoomProvider extends ChangeNotifier {
   List<TextMessage> get textMessages => _textMessages;
   bool get isConnected => _isConnected;
 
+  // Sesli ve yazılı mesajları zaman sırasına göre birleştir
+  List<dynamic> get allMessages {
+    final all = <dynamic>[];
+    all.addAll(_messages);
+    all.addAll(_textMessages);
+    all.sort((a, b) => a.sentAt.compareTo(b.sentAt));
+    return all;
+  }
+
   Future<void> initialize(String userName,
       {String? avatarUrl, String? status}) async {
     final prefs = await SharedPreferences.getInstance();
@@ -44,16 +53,43 @@ class RoomProvider extends ChangeNotifier {
     _socketService!.connect();
     // Oda ve katılımcı listesi eventlerini dinle
     _socketService!.onRooms((data) {
-      _availableRooms = (data as List)
-          .map((room) => Room(
-                id: room['id'],
-                name: room['name'],
-                participants: room['participants'] ?? [],
-                createdBy: room['createdBy'] ?? '',
-                createdAt: DateTime.tryParse(room['createdAt'] ?? '') ??
-                    DateTime.now(),
-              ))
-          .toList();
+      final List<Room> parsedRooms = [];
+      for (final room in (data as List)) {
+        // Eksik alanlar için varsayılan değerler ata
+        parsedRooms.add(Room(
+          id: room['id'] ?? '',
+          name: room['name'] ?? '',
+          participants: room['participants'] ?? [],
+          createdBy: room['createdBy'] ?? '',
+          createdAt: room['createdAt'] != null && room['createdAt'] != ''
+              ? DateTime.tryParse(room['createdAt']) ?? DateTime.now()
+              : DateTime.now(),
+          password: room.containsKey('password') &&
+                  room['password'] != null &&
+                  room['password'] != false
+              ? room['password'].toString()
+              : null,
+          inviteCode: room.containsKey('inviteCode') &&
+                  room['inviteCode'] != null &&
+                  room['inviteCode'] != false
+              ? room['inviteCode'].toString()
+              : null,
+        ));
+      }
+      // Eğer genel oda yoksa elle ekle (sunucu hatası ihtimaline karşı)
+      final hasGenel = parsedRooms.any((r) => r.id == 'genel');
+      if (!hasGenel) {
+        parsedRooms.insert(
+            0,
+            Room(
+              id: 'genel',
+              name: 'Genel Sohbet',
+              participants: [],
+              createdBy: 'system',
+              createdAt: DateTime.now(),
+            ));
+      }
+      _availableRooms = parsedRooms;
       notifyListeners();
     });
     _socketService!.onParticipants((data) {
@@ -208,7 +244,7 @@ class RoomProvider extends ChangeNotifier {
       sentAt: DateTime.now(),
     );
     _socketService?.sendTextMessage(msg);
-    addTextMessage(msg);
+    // addTextMessage(msg); // ÇİFT MESAJ OLMASIN DİYE KALDIRILDI
   }
 
   void listenTextMessages() {

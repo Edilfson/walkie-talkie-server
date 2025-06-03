@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/room_provider.dart';
+import 'package:walkie_talkie_app/providers/audio_provider.dart';
 import '../widgets/talk_button.dart';
-import '../widgets/message_list.dart';
-import '../widgets/text_chat_tab.dart';
+import 'message_input_bar.dart';
 
 class RoomScreen extends StatefulWidget {
   const RoomScreen({super.key});
@@ -14,30 +14,23 @@ class RoomScreen extends StatefulWidget {
 
 class _RoomScreenState extends State<RoomScreen>
     with SingleTickerProviderStateMixin {
-  late AnimationController _waveController;
-  late Animation<double> _waveAnimation;
+  late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
-    _waveController = AnimationController(
-      duration: const Duration(milliseconds: 800),
-      vsync: this,
-    );
-    _waveAnimation = Tween<double>(
-      begin: 0.5,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _waveController,
-      curve: Curves.easeInOut,
-    ));
-
-    // Kısa yazılı mesajlar için dinleyici başlat
+    _tabController = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<RoomProvider>(context, listen: false).listenTextMessages();
       Provider.of<RoomProvider>(context, listen: false)
           .listenKickedEvent(context);
     });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   @override
@@ -48,10 +41,7 @@ class _RoomScreenState extends State<RoomScreen>
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF2C1810),
-              Color(0xFF1A0F08),
-            ],
+            colors: [Color(0xFF2C1810), Color(0xFF1A0F08)],
           ),
         ),
         child: SafeArea(
@@ -66,10 +56,9 @@ class _RoomScreenState extends State<RoomScreen>
                   ),
                 );
               }
-
               return Column(
                 children: [
-                  // Header
+                  // Header ve katılımcı listesi
                   Container(
                     padding: const EdgeInsets.all(20),
                     child: Row(
@@ -138,8 +127,7 @@ class _RoomScreenState extends State<RoomScreen>
                       ],
                     ),
                   ),
-
-                  // Participants
+                  // Katılımcı listesi
                   Container(
                     height: 80,
                     padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -151,7 +139,6 @@ class _RoomScreenState extends State<RoomScreen>
                             roomProvider.roomParticipants[index];
                         final isCurrentUser =
                             participant.id == roomProvider.currentUser?.id;
-
                         return Container(
                           margin: const EdgeInsets.only(right: 15),
                           child: Column(
@@ -187,7 +174,6 @@ class _RoomScreenState extends State<RoomScreen>
                                         ),
                                       ),
                                     ),
-                                  // Yönetici rozeti
                                   if (participant.id == room.createdBy)
                                     Positioned(
                                       top: 0,
@@ -197,7 +183,6 @@ class _RoomScreenState extends State<RoomScreen>
                                     ),
                                 ],
                               ),
-                              // Katılımcı atma butonu (sadece yönetici ve kendisi değilse)
                               if (roomProvider.currentUser?.id ==
                                       room.createdBy &&
                                   participant.id != room.createdBy)
@@ -233,62 +218,41 @@ class _RoomScreenState extends State<RoomScreen>
                       },
                     ),
                   ),
-
-                  const SizedBox(height: 20),
-
-                  // Messages
-                  Expanded(
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 20),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(20),
+                  const SizedBox(height: 10),
+                  // TabBar
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 20),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: TabBar(
+                      controller: _tabController,
+                      indicator: BoxDecoration(
+                        color: Colors.amber.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Column(
-                        children: [
-                          // Favori mesajlar ve kısa yazılı mesaj sekmesi
-                          DefaultTabController(
-                            length: 3,
-                            child: Column(
-                              children: [
-                                const TabBar(
-                                  tabs: [
-                                    Tab(
-                                        icon: Icon(Icons.chat_bubble_outline),
-                                        text: 'Sesli'),
-                                    Tab(
-                                        icon: Icon(Icons.star),
-                                        text: 'Favoriler'),
-                                    Tab(
-                                        icon: Icon(Icons.message),
-                                        text: 'Yazılı'),
-                                  ],
-                                ),
-                                SizedBox(
-                                  height: 350, // Mesaj listesi yüksekliği
-                                  child: TabBarView(
-                                    children: [
-                                      const MessageList(),
-                                      const MessageList(
-                                          showOnlyFavorites: true),
-                                      TextChatTab(),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                      labelColor: Colors.amber,
+                      unselectedLabelColor: Colors.white70,
+                      tabs: const [
+                        Tab(icon: Icon(Icons.mic), text: 'Telsiz'),
+                        Tab(icon: Icon(Icons.chat), text: 'Mesajlaşma'),
+                      ],
                     ),
                   ),
-
-                  const SizedBox(height: 30),
-
-                  // Talk Button
-                  const TalkButton(),
-
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 10),
+                  // TabBarView
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        // Telsiz Tab: Only audio messages and talk button
+                        _AudioTab(),
+                        // Mesajlaşma Tab: Only text messages and input
+                        _TextTab(),
+                      ],
+                    ),
+                  ),
                 ],
               );
             },
@@ -306,81 +270,168 @@ class _RoomScreenState extends State<RoomScreen>
   }
 }
 
-class _TextChatTab extends StatefulWidget {
-  @override
-  State<_TextChatTab> createState() => _TextChatTabState();
-}
-
-class _TextChatTabState extends State<_TextChatTab> {
-  final TextEditingController _controller = TextEditingController();
-
+// --- Audio Tab ---
+class _AudioTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final roomProvider = Provider.of<RoomProvider>(context);
     return Column(
       children: [
         Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: roomProvider.textMessages.length,
-            itemBuilder: (context, index) {
-              final msg = roomProvider.textMessages[index];
-              final isOwn = msg.senderId == roomProvider.currentUser?.id;
-              return Align(
-                alignment: isOwn ? Alignment.centerRight : Alignment.centerLeft,
-                child: Container(
-                  margin: const EdgeInsets.symmetric(vertical: 4),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isOwn ? Colors.amber : Colors.white.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (!isOwn)
-                        Text(msg.senderName,
-                            style: const TextStyle(
-                                fontSize: 12, color: Colors.white70)),
-                      Text(msg.text,
-                          style: TextStyle(
-                              color: isOwn ? Colors.black : Colors.white)),
-                      Text(_formatTime(msg.sentAt),
-                          style: TextStyle(
-                              fontSize: 10,
-                              color: isOwn ? Colors.black54 : Colors.white54)),
-                    ],
-                  ),
-                ),
+          child: Consumer<RoomProvider>(
+            builder: (context, roomProvider, child) {
+              final audioMessages = roomProvider.messages;
+              if (audioMessages.isEmpty) {
+                return const Center(
+                  child: Text('Henüz sesli mesaj yok',
+                      style: TextStyle(color: Colors.white54)),
+                );
+              }
+              return ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: audioMessages.length,
+                itemBuilder: (context, index) {
+                  final msg = audioMessages[index];
+                  final isOwn = msg.senderId == roomProvider.currentUser?.id;
+                  return Align(
+                    alignment:
+                        isOwn ? Alignment.centerRight : Alignment.centerLeft,
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isOwn
+                            ? Colors.amber
+                            : Colors.white.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: Icon(Icons.play_arrow,
+                                color: isOwn ? Colors.black : Colors.white),
+                            onPressed: () {
+                              // Play audio logic (handled by AudioProvider)
+                              final audioProvider = Provider.of<AudioProvider>(
+                                  context,
+                                  listen: false);
+                              if (audioProvider.isPlaying) {
+                                audioProvider.stopPlaying();
+                              } else {
+                                audioProvider.playAudio(msg.audioPath);
+                              }
+                            },
+                          ),
+                          Text(isOwn ? 'Sen' : msg.senderName,
+                              style: TextStyle(
+                                  color: isOwn ? Colors.black : Colors.white,
+                                  fontSize: 13)),
+                          const SizedBox(width: 8),
+                          Text(_formatTime(msg.sentAt),
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  color:
+                                      isOwn ? Colors.black54 : Colors.white54)),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               );
             },
           ),
         ),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _controller,
-                decoration: const InputDecoration(hintText: 'Mesaj yaz...'),
-                onSubmitted: (_) => _sendMessage(roomProvider),
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.send, color: Colors.amber),
-              onPressed: () => _sendMessage(roomProvider),
-            ),
-          ],
+        // Push-to-talk button
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: SizedBox(height: 90, child: Center(child: TalkButton())),
         ),
       ],
     );
   }
 
-  void _sendMessage(RoomProvider roomProvider) {
-    final text = _controller.text.trim();
-    if (text.isEmpty) return;
-    roomProvider.sendTextMessage(text);
-    _controller.clear();
+  String _formatTime(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+    if (difference.inMinutes < 1) {
+      return 'şimdi';
+    } else if (difference.inHours < 1) {
+      return '${difference.inMinutes}d önce';
+    } else if (difference.inDays < 1) {
+      return '${difference.inHours}s önce';
+    } else {
+      return '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+    }
+  }
+}
+
+// --- Text Tab ---
+class _TextTab extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Expanded(
+          child: Consumer<RoomProvider>(
+            builder: (context, roomProvider, child) {
+              final textMessages = roomProvider.textMessages;
+              if (textMessages.isEmpty) {
+                return const Center(
+                  child: Text('Henüz yazılı mesaj yok',
+                      style: TextStyle(color: Colors.white54)),
+                );
+              }
+              return ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: textMessages.length,
+                itemBuilder: (context, index) {
+                  final msg = textMessages[index];
+                  final isOwn = msg.senderId == roomProvider.currentUser?.id;
+                  return Align(
+                    alignment:
+                        isOwn ? Alignment.centerRight : Alignment.centerLeft,
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isOwn
+                            ? Colors.amber
+                            : Colors.white.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (!isOwn)
+                            Text(msg.senderName,
+                                style: const TextStyle(
+                                    fontSize: 12, color: Colors.white70)),
+                          Text(msg.text,
+                              style: TextStyle(
+                                  color: isOwn ? Colors.black : Colors.white)),
+                          Text(_formatTime(msg.sentAt),
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  color:
+                                      isOwn ? Colors.black54 : Colors.white54)),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+        // Text input bar
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: MessageInputBar(),
+        ),
+      ],
+    );
   }
 
   String _formatTime(DateTime dateTime) {
