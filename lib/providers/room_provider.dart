@@ -248,9 +248,31 @@ class RoomProvider extends ChangeNotifier {
   }
 
   void listenTextMessages() {
+    // Önce eski listener'ı kaldır
+    _socketService?.socket.off('textMessage');
     _socketService?.onTextMessage((data) {
       final msg = TextMessage.fromJson(data);
       addTextMessage(msg);
+    });
+  }
+
+  void listenAudioMessages() {
+    // Önce eski listener'ı kaldır
+    _socketService?.socket.off('audio');
+    _socketService?.onAudio((data) {
+      final msg = AudioMessage(
+        id: const Uuid().v4(),
+        roomId: data['room'] ?? '',
+        senderId: data['sender'] ?? 'unknown',
+        senderName: data['sender'] ?? 'unknown',
+        audioPath: data['audioBlob'],
+        duration: const Duration(seconds: 3),
+        sentAt: DateTime.now(),
+      );
+      if (_currentRoom != null && _currentRoom!.id == data['room']) {
+        _messages.add(msg);
+        notifyListeners();
+      }
     });
   }
 

@@ -93,7 +93,9 @@
     if (window.Notification && Notification.permission !== 'granted') {
       Notification.requestPermission().then(function(permission) {
         if (permission !== 'granted') {
-          alert('Bildirim izni verilmedi. Bildirimler devre dışı.');
+          if (window.location.hostname === 'localhost') {
+            console.warn('Bildirim izni verilmedi. Bildirimler devre dışı.');
+          }
         }
       });
     }
@@ -103,6 +105,7 @@
         if (window.Notification && Notification.permission === 'granted') {
           // Güvenlik: title ve options'ta zararlı içerik olmadığından emin olun
           if (typeof title !== 'string' || title.length > 100) return;
+          if (options && typeof options !== 'object') return;
           var notification = new Notification(title, options);
           notification.onclick = function(event) {
             event.preventDefault();

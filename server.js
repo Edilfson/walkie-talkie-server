@@ -116,7 +116,8 @@ io.on('connection', (socket) => {
     if (!rooms[data.room].messages) rooms[data.room].messages = [];
     rooms[data.room].messages.push(msg);
     pruneOldMessages(data.room);
-    socket.to(data.room).emit('audio', msg);
+    // Tüm odaya (gönderen dahil) iletmek için io.in kullan
+    io.in(data.room).emit('audio', msg);
   });
 
   // Kısa yazılı mesaj event'i
