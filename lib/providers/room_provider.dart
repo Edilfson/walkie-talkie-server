@@ -25,7 +25,8 @@ class RoomProvider extends ChangeNotifier {
 
   Future<void> initialize(String userName) async {
     final prefs = await SharedPreferences.getInstance();
-    _serverUrl = prefs.getString('serverUrl') ?? 'http://localhost:3000';
+    _serverUrl = prefs.getString('serverUrl') ??
+        'https://walkie-talkie-server-0j4t.onrender.com';
     _currentUser = User(
       id: const Uuid().v4(),
       name: userName,
@@ -103,6 +104,18 @@ class RoomProvider extends ChangeNotifier {
     notifyListeners();
     // Sunucuya gönder
     _socketService?.sendAudio(_currentRoom!.id, audioPath, _currentUser!.name);
+  }
+
+  Future<void> createRoom(String roomName) async {
+    final newRoom = Room(
+      id: const Uuid().v4(),
+      name: roomName,
+      participants: [],
+      createdBy: _currentUser?.id ?? '',
+      createdAt: DateTime.now(),
+    );
+    _availableRooms.add(newRoom);
+    notifyListeners();
   }
 
   @override
