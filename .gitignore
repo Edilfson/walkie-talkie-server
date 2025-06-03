@@ -41,3 +41,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# build/web klasörünü repoya eklemek için aşağıdaki satırı geçici olarak yorum satırı yapıyoruz
+# build/

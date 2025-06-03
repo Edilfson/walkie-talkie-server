@@ -6,15 +6,17 @@ class SocketService {
 
   SocketService(this.serverUrl);
 
-  void connect(String room) {
+  void connect([String? room]) {
     socket = IO.io(serverUrl, <String, dynamic>{
       'transports': ['websocket'],
       'autoConnect': false,
     });
     socket.connect();
-    socket.onConnect((_) {
-      socket.emit('join', room);
-    });
+    if (room != null && room.isNotEmpty) {
+      socket.onConnect((_) {
+        socket.emit('join', room);
+      });
+    }
   }
 
   void sendAudio(String room, dynamic audioBlob, String sender) {
@@ -28,5 +30,25 @@ class SocketService {
 
   void disconnect() {
     socket.disconnect();
+  }
+
+  void joinRoom(String roomId, Map<String, dynamic> user) {
+    socket.emit('join', {'roomId': roomId, 'user': user});
+  }
+
+  void leaveRoom(String roomId, String userId) {
+    socket.emit('leave', {'roomId': roomId, 'userId': userId});
+  }
+
+  void createRoom(Map<String, dynamic> room) {
+    socket.emit('createRoom', room);
+  }
+
+  void onRooms(void Function(dynamic data) callback) {
+    socket.on('rooms', callback);
+  }
+
+  void onParticipants(void Function(dynamic data) callback) {
+    socket.on('participants', callback);
   }
 }

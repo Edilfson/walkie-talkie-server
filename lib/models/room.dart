@@ -1,7 +1,7 @@
 class Room {
   final String id;
   final String name;
-  final List<String> participants;
+  final List<dynamic> participants; // Artık dinamik, User veya String olabilir
   final String createdBy;
   final DateTime createdAt;
 
@@ -17,7 +17,7 @@ class Room {
     return Room(
       id: json['id'],
       name: json['name'],
-      participants: List<String>.from(json['participants']),
+      participants: json['participants'] ?? [],
       createdBy: json['createdBy'],
       createdAt: DateTime.parse(json['createdAt']),
     );

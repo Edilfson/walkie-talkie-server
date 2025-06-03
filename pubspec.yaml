@@ -54,7 +54,7 @@ dependencies:
   js: ^0.6.4
 
   # Shared preferences for local storage
-  shared_preferences: ^2.2.2
+  shared_preferences: ^2.5.3
 
 dev_dependencies:
   flutter_test:

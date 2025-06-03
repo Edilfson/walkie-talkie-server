@@ -179,6 +179,19 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
+        const SizedBox(height: 10),
+        // Online kişi sayısı
+        Row(
+          children: [
+            const Icon(Icons.circle, color: Colors.green, size: 14),
+            const SizedBox(width: 6),
+            Text(
+              'Online: ${roomProvider.totalOnlineUsers}',
+              style: const TextStyle(
+                  color: Colors.green, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
         const SizedBox(height: 30),
         const Text(
           'Mevcut Odalar',
@@ -290,9 +303,18 @@ class _HomeScreenState extends State<HomeScreen> {
           ElevatedButton(
             onPressed: () async {
               if (_roomNameController.text.trim().isNotEmpty) {
-                await roomProvider.createRoom(_roomNameController.text.trim());
+                final newRoomId = await roomProvider
+                    .createRoom(_roomNameController.text.trim());
                 _roomNameController.clear();
                 if (mounted) Navigator.of(context).pop();
+                // Oda oluşturunca otomatik olarak oda ekranına geç
+                if (newRoomId != null && mounted) {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const RoomScreen(),
+                    ),
+                  );
+                }
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),

@@ -13,7 +13,7 @@ class RoomProvider extends ChangeNotifier {
   User? _currentUser;
   List<Room> _availableRooms = [];
   List<User> _roomParticipants = [];
-  List<AudioMessage> _messages = [];
+  final List<AudioMessage> _messages = [];
   bool _isConnected = false;
 
   Room? get currentRoom => _currentRoom;
@@ -34,17 +34,33 @@ class RoomProvider extends ChangeNotifier {
       lastSeen: DateTime.now(),
     );
     _isConnected = true;
-    notifyListeners();
-    // Demo odaları kaldır, sadece bir oda olsun
-    _availableRooms = [
-      Room(
-        id: 'room1',
-        name: 'Genel Sohbet',
-        participants: [],
-        createdBy: _currentUser!.id,
-        createdAt: DateTime.now(),
-      ),
-    ];
+    _socketService = SocketService(_serverUrl);
+    _socketService!.connect();
+    // Oda ve katılımcı listesi eventlerini dinle
+    _socketService!.onRooms((data) {
+      _availableRooms = (data as List)
+          .map((room) => Room(
+                id: room['id'],
+                name: room['name'],
+                participants: room['participants'] ?? [],
+                createdBy: room['createdBy'] ?? '',
+                createdAt: DateTime.tryParse(room['createdAt'] ?? '') ??
+                    DateTime.now(),
+              ))
+          .toList();
+      notifyListeners();
+    });
+    _socketService!.onParticipants((data) {
+      _roomParticipants = (data as List)
+          .map((u) => User(
+                id: u['id'],
+                name: u['name'],
+                isOnline: u['isOnline'] ?? true,
+                lastSeen: DateTime.now(),
+              ))
+          .toList();
+      notifyListeners();
+    });
     notifyListeners();
   }
 
@@ -52,10 +68,10 @@ class RoomProvider extends ChangeNotifier {
     if (_socketService != null) {
       _socketService!.disconnect();
     }
+    // Oda ve katılımcı yönetimi merkezi sunucuda, burada sadece sesli mesaj eventini dinle
     _socketService = SocketService(_serverUrl);
-    _socketService!.connect(roomId);
+    _socketService!.connect();
     _socketService!.onAudio((data) {
-      // Sunucudan gelen sesli mesajı ekle
       final msg = AudioMessage(
         id: const Uuid().v4(),
         roomId: roomId,
@@ -72,19 +88,24 @@ class RoomProvider extends ChangeNotifier {
 
   Future<void> joinRoom(String roomId) async {
     if (_currentUser == null) return;
-    final room = _availableRooms.firstWhere((r) => r.id == roomId);
-    _currentRoom = room;
-    connectToRoom(roomId);
-    _roomParticipants = [_currentUser!];
+    _currentRoom = _availableRooms.firstWhere((r) => r.id == roomId,
+        orElse: () => Room(
+            id: roomId,
+            name: '',
+            participants: [],
+            createdBy: '',
+            createdAt: DateTime.now()));
+    _socketService?.joinRoom(roomId, _currentUser!.toJson());
     _messages.clear();
     notifyListeners();
   }
 
   Future<void> leaveRoom() async {
+    if (_currentRoom == null || _currentUser == null) return;
+    _socketService?.leaveRoom(_currentRoom!.id, _currentUser!.id);
     _currentRoom = null;
     _roomParticipants.clear();
     _messages.clear();
-    _socketService?.disconnect();
     notifyListeners();
   }
 
@@ -106,16 +127,37 @@ class RoomProvider extends ChangeNotifier {
     _socketService?.sendAudio(_currentRoom!.id, audioPath, _currentUser!.name);
   }
 
-  Future<void> createRoom(String roomName) async {
+  Future<String?> createRoom(String roomName) async {
+    if (_currentUser == null) return null;
     final newRoom = Room(
       id: const Uuid().v4(),
       name: roomName,
       participants: [],
-      createdBy: _currentUser?.id ?? '',
+      createdBy: _currentUser!.id,
       createdAt: DateTime.now(),
     );
-    _availableRooms.add(newRoom);
+    _socketService?.createRoom({
+      'roomId': newRoom.id,
+      'name': newRoom.name,
+      'createdBy': newRoom.createdBy,
+      'createdAt': newRoom.createdAt.toIso8601String(),
+    });
+    await joinRoom(newRoom.id);
     notifyListeners();
+    return newRoom.id;
+  }
+
+  int get totalOnlineUsers {
+    // Tüm odalardaki katılımcıların unique id'lerini topla
+    final ids = <String>{};
+    for (final room in _availableRooms) {
+      for (final user in room.participants) {
+        if (user is Map && user['id'] != null)
+          ids.add(user['id']);
+        else if (user is String) ids.add(user);
+      }
+    }
+    return ids.length;
   }
 
   @override
