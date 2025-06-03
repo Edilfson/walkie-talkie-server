@@ -61,6 +61,23 @@ class RoomProvider extends ChangeNotifier {
           .toList();
       notifyListeners();
     });
+    // Tüm odalarda sesli mesaj eventini dinle
+    _socketService!.onAudio((data) {
+      final msg = AudioMessage(
+        id: const Uuid().v4(),
+        roomId: data['room'] ?? '',
+        senderId: data['sender'] ?? 'unknown',
+        senderName: data['sender'] ?? 'unknown',
+        audioPath: data['audioBlob'],
+        duration: const Duration(seconds: 3),
+        sentAt: DateTime.now(),
+      );
+      // Sadece aktif odadaysa mesajı ekle
+      if (_currentRoom != null && _currentRoom!.id == data['room']) {
+        _messages.add(msg);
+        notifyListeners();
+      }
+    });
     notifyListeners();
   }
 
@@ -111,19 +128,7 @@ class RoomProvider extends ChangeNotifier {
 
   Future<void> sendAudioMessage(String audioPath) async {
     if (_currentRoom == null || _currentUser == null) return;
-    // Mesajı önce kendi listene ekle
-    final message = AudioMessage(
-      id: const Uuid().v4(),
-      roomId: _currentRoom!.id,
-      senderId: _currentUser!.id,
-      senderName: _currentUser!.name,
-      audioPath: audioPath,
-      duration: const Duration(seconds: 3),
-      sentAt: DateTime.now(),
-    );
-    _messages.add(message);
-    notifyListeners();
-    // Sunucuya gönder
+    // Sadece sunucuya gönder, local olarak ekleme
     _socketService?.sendAudio(_currentRoom!.id, audioPath, _currentUser!.name);
   }
 

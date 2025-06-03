@@ -93,7 +93,8 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     for (const roomId in rooms) {
       rooms[roomId].participants = rooms[roomId].participants.filter(u => u.socketId !== socket.id);
-      if (rooms[roomId].participants.length === 0) {
+      // 'genel' odasını asla silme
+      if (rooms[roomId].participants.length === 0 && roomId !== 'genel') {
         delete rooms[roomId];
       }
     }
