@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 import '../models/room.dart';
 import '../models/user.dart';
 import '../models/audio_message.dart';
+import '../models/text_message.dart';
 import '../services/socket_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -14,6 +15,7 @@ class RoomProvider extends ChangeNotifier {
   List<Room> _availableRooms = [];
   List<User> _roomParticipants = [];
   final List<AudioMessage> _messages = [];
+  final List<TextMessage> _textMessages = [];
   bool _isConnected = false;
 
   Room? get currentRoom => _currentRoom;
@@ -21,9 +23,11 @@ class RoomProvider extends ChangeNotifier {
   List<Room> get availableRooms => _availableRooms;
   List<User> get roomParticipants => _roomParticipants;
   List<AudioMessage> get messages => _messages;
+  List<TextMessage> get textMessages => _textMessages;
   bool get isConnected => _isConnected;
 
-  Future<void> initialize(String userName) async {
+  Future<void> initialize(String userName,
+      {String? avatarUrl, String? status}) async {
     final prefs = await SharedPreferences.getInstance();
     _serverUrl = prefs.getString('serverUrl') ??
         'https://walkie-talkie-server-0j4t.onrender.com';
@@ -32,6 +36,8 @@ class RoomProvider extends ChangeNotifier {
       name: userName,
       isOnline: true,
       lastSeen: DateTime.now(),
+      avatarUrl: avatarUrl,
+      status: status,
     );
     _isConnected = true;
     _socketService = SocketService(_serverUrl);
@@ -103,7 +109,8 @@ class RoomProvider extends ChangeNotifier {
     });
   }
 
-  Future<void> joinRoom(String roomId) async {
+  Future<void> joinRoom(String roomId,
+      {String? password, String? inviteCode}) async {
     if (_currentUser == null) return;
     _currentRoom = _availableRooms.firstWhere((r) => r.id == roomId,
         orElse: () => Room(
@@ -112,8 +119,31 @@ class RoomProvider extends ChangeNotifier {
             participants: [],
             createdBy: '',
             createdAt: DateTime.now()));
-    _socketService?.joinRoom(roomId, _currentUser!.toJson());
+    _socketService?.joinRoom(
+      roomId,
+      _currentUser!.toJson(),
+      password: password,
+      inviteCode: inviteCode,
+    );
     _messages.clear();
+    // Sunucudan geçmiş mesajları dinle
+    _socketService?.socket.on('history', (data) {
+      if (data is List) {
+        _messages.clear();
+        for (final msg in data) {
+          _messages.add(AudioMessage(
+            id: msg['id'] ?? '',
+            roomId: msg['room'] ?? '',
+            senderId: msg['sender'] ?? 'unknown',
+            senderName: msg['sender'] ?? 'unknown',
+            audioPath: msg['audioBlob'],
+            duration: const Duration(seconds: 3),
+            sentAt: DateTime.fromMillisecondsSinceEpoch(msg['sentAt'] ?? 0),
+          ));
+        }
+        notifyListeners();
+      }
+    });
     notifyListeners();
   }
 
@@ -132,7 +162,8 @@ class RoomProvider extends ChangeNotifier {
     _socketService?.sendAudio(_currentRoom!.id, audioPath, _currentUser!.name);
   }
 
-  Future<String?> createRoom(String roomName) async {
+  Future<String?> createRoom(String roomName,
+      {String? password, String? inviteCode}) async {
     if (_currentUser == null) return null;
     final newRoom = Room(
       id: const Uuid().v4(),
@@ -140,16 +171,68 @@ class RoomProvider extends ChangeNotifier {
       participants: [],
       createdBy: _currentUser!.id,
       createdAt: DateTime.now(),
+      password: password,
+      inviteCode: inviteCode,
     );
     _socketService?.createRoom({
       'roomId': newRoom.id,
       'name': newRoom.name,
       'createdBy': newRoom.createdBy,
       'createdAt': newRoom.createdAt.toIso8601String(),
+      'password': password,
+      'inviteCode': inviteCode,
     });
     await joinRoom(newRoom.id);
     notifyListeners();
     return newRoom.id;
+  }
+
+  void addTextMessage(TextMessage msg) {
+    _textMessages.add(msg);
+    notifyListeners();
+  }
+
+  void clearTextMessages() {
+    _textMessages.clear();
+    notifyListeners();
+  }
+
+  void sendTextMessage(String text) {
+    if (_currentRoom == null || _currentUser == null) return;
+    final msg = TextMessage(
+      id: const Uuid().v4(),
+      roomId: _currentRoom!.id,
+      senderId: _currentUser!.id,
+      senderName: _currentUser!.name,
+      text: text,
+      sentAt: DateTime.now(),
+    );
+    _socketService?.sendTextMessage(msg);
+    addTextMessage(msg);
+  }
+
+  void listenTextMessages() {
+    _socketService?.onTextMessage((data) {
+      final msg = TextMessage.fromJson(data);
+      addTextMessage(msg);
+    });
+  }
+
+  void kickParticipant(String userId) {
+    if (_currentRoom == null || _currentUser == null) return;
+    _socketService?.kickParticipant(_currentRoom!.id, userId, _currentUser!.id);
+  }
+
+  void listenKickedEvent(BuildContext context) {
+    _socketService?.socket.on('kicked', (data) {
+      if (data is Map && data['roomId'] == _currentRoom?.id) {
+        leaveRoom();
+        // Uyarı göster
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Oda yöneticisi tarafından atıldınız.')),
+        );
+      }
+    });
   }
 
   int get totalOnlineUsers {

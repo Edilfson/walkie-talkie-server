@@ -3,15 +3,19 @@ import 'package:provider/provider.dart';
 import '../providers/room_provider.dart';
 import 'package:walkie_talkie_app/providers/audio_provider.dart';
 import '../models/audio_message.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MessageList extends StatelessWidget {
-  const MessageList({super.key});
+  final bool showOnlyFavorites;
+  const MessageList({super.key, this.showOnlyFavorites = false});
 
   @override
   Widget build(BuildContext context) {
     return Consumer<RoomProvider>(
       builder: (context, roomProvider, child) {
-        final messages = roomProvider.messages;
+        final messages = showOnlyFavorites
+            ? roomProvider.messages.where((m) => m.isFavorite).toList()
+            : roomProvider.messages;
 
         if (messages.isEmpty) {
           return const Center(
@@ -80,10 +84,10 @@ class MessageList extends StatelessWidget {
                   ),
                   if (isOwnMessage) ...[
                     const SizedBox(width: 10),
-                    CircleAvatar(
+                    const CircleAvatar(
                       radius: 16,
                       backgroundColor: Colors.amber,
-                      child: const Icon(
+                      child: Icon(
                         Icons.person,
                         size: 18,
                         color: Colors.black,
@@ -141,7 +145,20 @@ class _AudioMessageBubbleState extends State<AudioMessageBubble>
         _audioProvider = Provider.of<AudioProvider>(context, listen: false);
         _audioProvider?.addListener(_onAudioStateChanged);
       }
+      // Favori durumu localden yükle
+      _loadFavorite();
     });
+  }
+
+  void _loadFavorite() async {
+    final prefs = await SharedPreferences.getInstance();
+    final favKey = 'favorite_${widget.message.id}';
+    final isFav = prefs.getBool(favKey) ?? false;
+    if (mounted && widget.message.isFavorite != isFav) {
+      setState(() {
+        widget.message.isFavorite = isFav;
+      });
+    }
   }
 
   void _onAudioStateChanged() {
@@ -211,6 +228,31 @@ class _AudioMessageBubbleState extends State<AudioMessageBubble>
                         size: 20,
                       ),
                     ),
+                  ),
+                  // Favori butonu
+                  IconButton(
+                    icon: Icon(
+                      widget.message.isFavorite
+                          ? Icons.star
+                          : Icons.star_border,
+                      color: widget.message.isFavorite
+                          ? Colors.amber
+                          : Colors.white38,
+                      size: 22,
+                    ),
+                    onPressed: () async {
+                      setState(() {
+                        widget.message.isFavorite = !widget.message.isFavorite;
+                      });
+                      // Favori durumu localde saklanacak
+                      final prefs = await SharedPreferences.getInstance();
+                      final favKey = 'favorite_${widget.message.id}';
+                      if (widget.message.isFavorite) {
+                        prefs.setBool(favKey, true);
+                      } else {
+                        prefs.remove(favKey);
+                      }
+                    },
                   ),
                   const SizedBox(width: 10),
                   Expanded(

@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 // Mobil için paketler
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -84,12 +83,17 @@ class AudioProvider extends ChangeNotifier {
     if (kIsWeb) {
       if (_mediaRecorder != null && _isRecording) {
         final completer = Completer<String?>();
-        void onStopHandler(event) {
+        void onStopHandler(event) async {
           final blob = html.Blob(_audioChunks, 'audio/webm');
-          _audioUrl = html.Url.createObjectUrlFromBlob(blob);
-          _recordingPath = _audioUrl;
+          // Base64 olarak oku
+          final reader = html.FileReader();
+          reader.readAsDataUrl(blob);
+          await reader.onLoad.first;
+          final base64 = reader.result as String;
+          _audioUrl = base64;
+          _recordingPath = base64;
           _stream?.getTracks().forEach((track) => track.stop());
-          completer.complete(_audioUrl);
+          completer.complete(base64);
           _mediaRecorder!.removeEventListener('stop', onStopHandler);
           notifyListeners();
         }
@@ -120,14 +124,27 @@ class AudioProvider extends ChangeNotifier {
   Future<void> playAudio(String? path) async {
     if (kIsWeb) {
       if (path == null) return;
-      final audio = html.AudioElement(path);
-      _isPlaying = true;
-      notifyListeners();
-      await audio.play();
-      await audio.onEnded.first;
-      _isPlaying = false;
-      notifyListeners();
-      return;
+      // Eğer base64 ile başlıyorsa, blob oluştur
+      if (path.startsWith('data:audio')) {
+        final audio = html.AudioElement(path);
+        _isPlaying = true;
+        notifyListeners();
+        await audio.play();
+        await audio.onEnded.first;
+        _isPlaying = false;
+        notifyListeners();
+        return;
+      } else {
+        // Eski local url ise
+        final audio = html.AudioElement(path);
+        _isPlaying = true;
+        notifyListeners();
+        await audio.play();
+        await audio.onEnded.first;
+        _isPlaying = false;
+        notifyListeners();
+        return;
+      }
     }
     // Mobil (Android/iOS)
     if (path == null) return;

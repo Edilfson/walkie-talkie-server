@@ -61,6 +61,47 @@
       }
     };
   </script>
+
+  <!-- Push Notification support for web (service worker registration) -->
+  <script>
+    // Service worker kaydında hata yakalama ve loglama
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('flutter_service_worker.js')
+          .then(function(reg) {
+            console.log('Service worker registered:', reg);
+          })
+          .catch(function(err) {
+            console.error('Service worker registration failed:', err);
+          });
+      });
+    }
+    // Web Push API örnek (isteğe bağlı):
+    // Bildirim izni iste ve reddedilirse uyarı göster
+    if (window.Notification && Notification.permission !== 'granted') {
+      Notification.requestPermission().then(function(permission) {
+        if (permission !== 'granted') {
+          alert('Bildirim izni verilmedi. Bildirimler devre dışı.');
+        }
+      });
+    }
+    // Bildirim gösterme fonksiyonu (Flutter'dan JS interop ile çağrılabilir)
+    window.showPushNotification = function(title, options) {
+      try {
+        if (window.Notification && Notification.permission === 'granted') {
+          var notification = new Notification(title, options);
+          notification.onclick = function(event) {
+            event.preventDefault();
+            window.focus();
+            // Oda ekranına yönlendirme veya özel işlem eklenebilir
+            console.log('Bildirim tıklandı:', title);
+          };
+        }
+      } catch (e) {
+        console.error('Bildirim gösterilemedi:', e);
+      }
+    };
+  </script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>

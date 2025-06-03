@@ -20,6 +20,7 @@ class SocketService {
   }
 
   void sendAudio(String room, dynamic audioBlob, String sender) {
+    // Web'de base64 string gönderiliyor, mobilde path
     socket.emit(
         'audio', {'room': room, 'audioBlob': audioBlob, 'sender': sender});
   }
@@ -32,8 +33,12 @@ class SocketService {
     socket.disconnect();
   }
 
-  void joinRoom(String roomId, Map<String, dynamic> user) {
-    socket.emit('join', {'roomId': roomId, 'user': user});
+  void joinRoom(String roomId, Map<String, dynamic> user,
+      {String? password, String? inviteCode}) {
+    final joinData = {'roomId': roomId, 'user': user};
+    if (password != null) joinData['password'] = password;
+    if (inviteCode != null) joinData['inviteCode'] = inviteCode;
+    socket.emit('join', joinData);
   }
 
   void leaveRoom(String roomId, String userId) {
@@ -50,5 +55,21 @@ class SocketService {
 
   void onParticipants(void Function(dynamic data) callback) {
     socket.on('participants', callback);
+  }
+
+  void sendTextMessage(dynamic msg) {
+    socket.emit('textMessage', msg.toJson());
+  }
+
+  void onTextMessage(void Function(dynamic data) callback) {
+    socket.on('textMessage', callback);
+  }
+
+  void kickParticipant(String roomId, String targetUserId, String byUserId) {
+    socket.emit('kickParticipant', {
+      'roomId': roomId,
+      'targetUserId': targetUserId,
+      'byUserId': byUserId,
+    });
   }
 }

@@ -3,12 +3,16 @@ class User {
   final String name;
   final bool isOnline;
   final DateTime lastSeen;
+  final String? avatarUrl; // Profil fotoğrafı (opsiyonel)
+  final String? status; // Durum mesajı (opsiyonel)
 
   User({
     required this.id,
     required this.name,
     required this.isOnline,
     required this.lastSeen,
+    this.avatarUrl,
+    this.status,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -17,6 +21,8 @@ class User {
       name: json['name'],
       isOnline: json['isOnline'],
       lastSeen: DateTime.parse(json['lastSeen']),
+      avatarUrl: json['avatarUrl'],
+      status: json['status'],
     );
   }
 
@@ -26,6 +32,8 @@ class User {
       'name': name,
       'isOnline': isOnline,
       'lastSeen': lastSeen.toIso8601String(),
+      'avatarUrl': avatarUrl,
+      'status': status,
     };
   }
 }

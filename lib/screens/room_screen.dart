@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/room_provider.dart';
 import '../widgets/talk_button.dart';
 import '../widgets/message_list.dart';
+import '../widgets/text_chat_tab.dart';
 
 class RoomScreen extends StatefulWidget {
   const RoomScreen({super.key});
@@ -11,7 +12,34 @@ class RoomScreen extends StatefulWidget {
   State<RoomScreen> createState() => _RoomScreenState();
 }
 
-class _RoomScreenState extends State<RoomScreen> {
+class _RoomScreenState extends State<RoomScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _waveController;
+  late Animation<double> _waveAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _waveController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _waveAnimation = Tween<double>(
+      begin: 0.5,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _waveController,
+      curve: Curves.easeInOut,
+    ));
+
+    // Kısa yazılı mesajlar için dinleyici başlat
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<RoomProvider>(context, listen: false).listenTextMessages();
+      Provider.of<RoomProvider>(context, listen: false)
+          .listenKickedEvent(context);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -159,8 +187,29 @@ class _RoomScreenState extends State<RoomScreen> {
                                         ),
                                       ),
                                     ),
+                                  // Yönetici rozeti
+                                  if (participant.id == room.createdBy)
+                                    Positioned(
+                                      top: 0,
+                                      right: 0,
+                                      child: Icon(Icons.star,
+                                          color: Colors.amber, size: 18),
+                                    ),
                                 ],
                               ),
+                              // Katılımcı atma butonu (sadece yönetici ve kendisi değilse)
+                              if (roomProvider.currentUser?.id ==
+                                      room.createdBy &&
+                                  participant.id != room.createdBy)
+                                TextButton(
+                                  onPressed: () {
+                                    roomProvider
+                                        .kickParticipant(participant.id);
+                                  },
+                                  child: const Text('At',
+                                      style: TextStyle(
+                                          color: Colors.red, fontSize: 10)),
+                                ),
                               const SizedBox(height: 5),
                               Text(
                                 isCurrentUser
@@ -195,7 +244,42 @@ class _RoomScreenState extends State<RoomScreen> {
                         color: Colors.black.withOpacity(0.3),
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: const MessageList(),
+                      child: Column(
+                        children: [
+                          // Favori mesajlar ve kısa yazılı mesaj sekmesi
+                          DefaultTabController(
+                            length: 3,
+                            child: Column(
+                              children: [
+                                const TabBar(
+                                  tabs: [
+                                    Tab(
+                                        icon: Icon(Icons.chat_bubble_outline),
+                                        text: 'Sesli'),
+                                    Tab(
+                                        icon: Icon(Icons.star),
+                                        text: 'Favoriler'),
+                                    Tab(
+                                        icon: Icon(Icons.message),
+                                        text: 'Yazılı'),
+                                  ],
+                                ),
+                                SizedBox(
+                                  height: 350, // Mesaj listesi yüksekliği
+                                  child: TabBarView(
+                                    children: [
+                                      const MessageList(),
+                                      const MessageList(
+                                          showOnlyFavorites: true),
+                                      TextChatTab(),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
 
@@ -218,6 +302,98 @@ class _RoomScreenState extends State<RoomScreen> {
     await roomProvider.leaveRoom();
     if (mounted) {
       Navigator.of(context).pop();
+    }
+  }
+}
+
+class _TextChatTab extends StatefulWidget {
+  @override
+  State<_TextChatTab> createState() => _TextChatTabState();
+}
+
+class _TextChatTabState extends State<_TextChatTab> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  Widget build(BuildContext context) {
+    final roomProvider = Provider.of<RoomProvider>(context);
+    return Column(
+      children: [
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.all(12),
+            itemCount: roomProvider.textMessages.length,
+            itemBuilder: (context, index) {
+              final msg = roomProvider.textMessages[index];
+              final isOwn = msg.senderId == roomProvider.currentUser?.id;
+              return Align(
+                alignment: isOwn ? Alignment.centerRight : Alignment.centerLeft,
+                child: Container(
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isOwn ? Colors.amber : Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (!isOwn)
+                        Text(msg.senderName,
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.white70)),
+                      Text(msg.text,
+                          style: TextStyle(
+                              color: isOwn ? Colors.black : Colors.white)),
+                      Text(_formatTime(msg.sentAt),
+                          style: TextStyle(
+                              fontSize: 10,
+                              color: isOwn ? Colors.black54 : Colors.white54)),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                decoration: const InputDecoration(hintText: 'Mesaj yaz...'),
+                onSubmitted: (_) => _sendMessage(roomProvider),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.send, color: Colors.amber),
+              onPressed: () => _sendMessage(roomProvider),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  void _sendMessage(RoomProvider roomProvider) {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+    roomProvider.sendTextMessage(text);
+    _controller.clear();
+  }
+
+  String _formatTime(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+    if (difference.inMinutes < 1) {
+      return 'şimdi';
+    } else if (difference.inHours < 1) {
+      return '${difference.inMinutes}d önce';
+    } else if (difference.inDays < 1) {
+      return '${difference.inHours}s önce';
+    } else {
+      return '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
     }
   }
 }

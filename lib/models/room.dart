@@ -4,6 +4,8 @@ class Room {
   final List<dynamic> participants; // Artık dinamik, User veya String olabilir
   final String createdBy;
   final DateTime createdAt;
+  final String? password; // Oda şifresi (opsiyonel)
+  final String? inviteCode; // Davet kodu (opsiyonel)
 
   Room({
     required this.id,
@@ -11,6 +13,8 @@ class Room {
     required this.participants,
     required this.createdBy,
     required this.createdAt,
+    this.password,
+    this.inviteCode,
   });
 
   factory Room.fromJson(Map<String, dynamic> json) {
@@ -20,6 +24,8 @@ class Room {
       participants: json['participants'] ?? [],
       createdBy: json['createdBy'],
       createdAt: DateTime.parse(json['createdAt']),
+      password: json['password'],
+      inviteCode: json['inviteCode'],
     );
   }
 
@@ -30,6 +36,8 @@ class Room {
       'participants': participants,
       'createdBy': createdBy,
       'createdAt': createdAt.toIso8601String(),
+      'password': password,
+      'inviteCode': inviteCode,
     };
   }
 }

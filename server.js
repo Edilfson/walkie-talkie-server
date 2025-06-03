@@ -27,25 +27,45 @@ const rooms = {
     participants: [],
     createdBy: 'system',
     createdAt: new Date().toISOString(),
+    messages: [], // Son 1 saatlik mesajlar burada tutulacak
   },
 };
+
+// Mesaj geçmişi için maksimum süre (ms cinsinden)
+const MESSAGE_HISTORY_MS = 60 * 60 * 1000; // 1 saat
+
+function pruneOldMessages(roomId) {
+  if (!rooms[roomId] || !rooms[roomId].messages) return;
+  const now = Date.now();
+  rooms[roomId].messages = rooms[roomId].messages.filter(msg => now - msg.sentAt < MESSAGE_HISTORY_MS);
+}
 
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
   // Odaya katılma
-  socket.on('join', ({ roomId, user }) => {
-    socket.join(roomId);
+  socket.on('join', ({ roomId, user, password, inviteCode }) => {
+    // Oda yoksa oluştur (şifresiz/davetsiz ise)
     if (!rooms[roomId]) {
-      rooms[roomId] = { participants: [] };
+      rooms[roomId] = { participants: [], messages: [] };
     }
+    // Şifre/davet kodu kontrolü
+    const room = rooms[roomId];
+    if ((room.password && room.password !== password) || (room.inviteCode && room.inviteCode !== inviteCode)) {
+      socket.emit('join_error', { message: 'Şifre veya davet kodu hatalı!' });
+      return;
+    }
+    socket.join(roomId);
     // Katılımcı ekle (tekrar eklenmesin)
-    if (!rooms[roomId].participants.find(u => u.id === user.id)) {
-      rooms[roomId].participants.push(user);
+    if (!room.participants.find(u => u.id === user.id)) {
+      room.participants.push(user);
     }
+    // Oda geçmişini sadece yeni katılana gönder
+    pruneOldMessages(roomId);
+    socket.emit('history', room.messages || []);
     // Tüm istemcilere oda ve katılımcı listesini gönder
     io.emit('rooms', getRoomsSummary());
-    io.to(roomId).emit('participants', rooms[roomId].participants);
+    io.to(roomId).emit('participants', room.participants);
     console.log(`User ${user.name} joined room ${roomId}`);
   });
 
@@ -71,13 +91,15 @@ io.on('connection', (socket) => {
   });
 
   // Oda oluşturma
-  socket.on('createRoom', ({ roomId, name, createdBy, createdAt }) => {
+  socket.on('createRoom', ({ roomId, name, createdBy, createdAt, password, inviteCode }) => {
     // Her kullanıcı sadece bir oda oluşturabilir
     const userRoomExists = Object.values(rooms).some(
       room => room.createdBy === createdBy && roomId !== 'genel'
     );
     if (!rooms[roomId] && !userRoomExists) {
-      rooms[roomId] = { name, participants: [], createdBy, createdAt };
+      rooms[roomId] = { name, participants: [], createdBy, createdAt, password, inviteCode, messages: [] };
+      // Davet linki üret
+      rooms[roomId].inviteLink = `https://yourapp.com/join/${roomId}${inviteCode ? `?invite=${inviteCode}` : ''}`;
       io.emit('rooms', getRoomsSummary());
       console.log(`Room created: ${name}`);
     }
@@ -85,8 +107,47 @@ io.on('connection', (socket) => {
 
   // Sesli mesajı ilet
   socket.on('audio', (data) => {
-    // data: { room, audioBlob, sender }
-    socket.to(data.room).emit('audio', data);
+    // data: { room, audioBlob, sender, sentAt }
+    const msg = {
+      ...data,
+      sentAt: Date.now(),
+    };
+    if (!rooms[data.room]) return;
+    if (!rooms[data.room].messages) rooms[data.room].messages = [];
+    rooms[data.room].messages.push(msg);
+    pruneOldMessages(data.room);
+    socket.to(data.room).emit('audio', msg);
+  });
+
+  // Kısa yazılı mesaj event'i
+  socket.on('textMessage', (data) => {
+    const msg = {
+      ...data,
+      sentAt: Date.now(),
+    };
+    if (!rooms[data.roomId]) return;
+    if (!rooms[data.roomId].textMessages) rooms[data.roomId].textMessages = [];
+    rooms[data.roomId].textMessages.push(msg);
+    io.to(data.roomId).emit('textMessage', msg);
+  });
+
+  // Katılımcı atma (kick)
+  socket.on('kickParticipant', ({ roomId, targetUserId, byUserId }) => {
+    const room = rooms[roomId];
+    if (!room) return;
+    // Sadece oda yöneticisi atabilir
+    if (room.createdBy !== byUserId) return;
+    // Katılımcıyı çıkar
+    room.participants = room.participants.filter(u => u.id !== targetUserId);
+    // Atılan kullanıcıya özel event gönder
+    const targetSocket = Array.from(io.sockets.sockets.values()).find(s => s.userId === targetUserId);
+    if (targetSocket) {
+      targetSocket.leave(roomId);
+      targetSocket.emit('kicked', { roomId });
+    }
+    io.to(roomId).emit('participants', room.participants);
+    io.emit('rooms', getRoomsSummary());
+    console.log(`User ${targetUserId} kicked from room ${roomId} by ${byUserId}`);
   });
 
   // Bağlantı kopunca tüm odalardan çıkar
@@ -111,6 +172,9 @@ function getRoomsSummary() {
     participants: room.participants,
     createdBy: room.createdBy,
     createdAt: room.createdAt,
+    password: room.password ? true : false, // Şifreli mi?
+    inviteCode: room.inviteCode ? true : false, // Davet kodlu mu?
+    inviteLink: room.inviteLink || null,
   }));
 }
 
