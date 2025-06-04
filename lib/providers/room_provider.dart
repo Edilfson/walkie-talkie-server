@@ -89,12 +89,15 @@ class RoomProvider extends ChangeNotifier {
             ));
       }
       _availableRooms = parsedRooms;
-      notifyListeners();
-    });
+      notifyListeners();    });
     
     // Bağlantı kurulduktan sonra oda listesini iste
     _socketService!.socket.on('connect', (_) {
       _socketService!.requestRooms();
+      // Biraz bekle ve tekrar iste (güvenlik için)
+      Future.delayed(const Duration(milliseconds: 500), () {
+        _socketService!.requestRooms();
+      });
     });
     _socketService!.onParticipants((data) {
       _roomParticipants = (data as List)

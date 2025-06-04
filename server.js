@@ -43,6 +43,9 @@ function pruneOldMessages(roomId) {
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
+  // Bağlantı kurulduğunda otomatik olarak oda listesini gönder
+  socket.emit('rooms', getRoomsSummary());
+
   // Oda listesi iste
   socket.on('getRooms', () => {
     socket.emit('rooms', getRoomsSummary());
