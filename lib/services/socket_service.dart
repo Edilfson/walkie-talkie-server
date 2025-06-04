@@ -48,9 +48,12 @@ class SocketService {
   void createRoom(Map<String, dynamic> room) {
     socket.emit('createRoom', room);
   }
-
   void onRooms(void Function(dynamic data) callback) {
     socket.on('rooms', callback);
+  }
+
+  void requestRooms() {
+    socket.emit('getRooms');
   }
 
   void onParticipants(void Function(dynamic data) callback) {

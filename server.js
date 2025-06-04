@@ -43,6 +43,11 @@ function pruneOldMessages(roomId) {
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
+  // Oda listesi iste
+  socket.on('getRooms', () => {
+    socket.emit('rooms', getRoomsSummary());
+  });
+
   // Odaya katılma
   socket.on('join', ({ roomId, user, password, inviteCode }) => {
     // Oda yoksa oluştur (şifresiz/davetsiz ise)

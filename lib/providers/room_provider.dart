@@ -47,8 +47,7 @@ class RoomProvider extends ChangeNotifier {
       lastSeen: DateTime.now(),
       avatarUrl: avatarUrl,
       status: status,
-    );
-    _isConnected = true;
+    );    _isConnected = true;
     _socketService = SocketService(_serverUrl);
     _socketService!.connect();
     // Oda ve katılımcı listesi eventlerini dinle
@@ -91,6 +90,11 @@ class RoomProvider extends ChangeNotifier {
       }
       _availableRooms = parsedRooms;
       notifyListeners();
+    });
+    
+    // Bağlantı kurulduktan sonra oda listesini iste
+    _socketService!.socket.on('connect', (_) {
+      _socketService!.requestRooms();
     });
     _socketService!.onParticipants((data) {
       _roomParticipants = (data as List)
@@ -298,9 +302,9 @@ class RoomProvider extends ChangeNotifier {
     final ids = <String>{};
     for (final room in _availableRooms) {
       for (final user in room.participants) {
-        if (user is Map && user['id'] != null)
+        if (user is Map && user['id'] != null) {
           ids.add(user['id']);
-        else if (user is String) ids.add(user);
+        } else if (user is String) ids.add(user);
       }
     }
     return ids.length;
