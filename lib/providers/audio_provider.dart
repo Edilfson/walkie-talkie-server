@@ -120,27 +120,44 @@ class AudioProvider extends ChangeNotifier {
     notifyListeners();
     return null;
   }
-
   Future<void> playAudio(String? path) async {
     if (kIsWeb) {
       if (path == null) return;
-      // Eğer base64 ile başlıyorsa, blob oluştur
-      if (path.startsWith('data:audio')) {
-        final audio = html.AudioElement(path);
+      
+      try {
+        html.AudioElement? audio;
+        
+        // Eğer base64 ile başlıyorsa, önce blob oluştur sonra URL'e çevir
+        if (path.startsWith('data:audio')) {
+          // Base64'ü blob'a çevir
+          final response = await html.window.fetch(path);
+          final blob = await response.blob();
+          final blobUrl = html.Url.createObjectUrl(blob);
+          
+          audio = html.AudioElement(blobUrl);
+          
+          // Oynatma bittiğinde blob URL'yi temizle
+          audio.onEnded.listen((_) {
+            html.Url.revokeObjectUrl(blobUrl);
+          });
+        } else {
+          // Normal URL ise direkt kullan
+          audio = html.AudioElement(path);
+        }
+        
         _isPlaying = true;
         notifyListeners();
+        
+        // Ses oynatmaya başla
         await audio.play();
         await audio.onEnded.first;
+        
         _isPlaying = false;
         notifyListeners();
         return;
-      } else {
-        // Eski local url ise
-        final audio = html.AudioElement(path);
-        _isPlaying = true;
-        notifyListeners();
-        await audio.play();
-        await audio.onEnded.first;
+        
+      } catch (e) {
+        print('Audio playback error: $e');
         _isPlaying = false;
         notifyListeners();
         return;
